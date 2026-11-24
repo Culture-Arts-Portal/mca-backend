@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Installs exactly what package-lock.json says. Fails if package.json and the lock file disagree.
+      - run: npm ci
+
+      # Checks schema.prisma is valid. No database is needed; the URL only has to be well formed.
+      - run: npx prisma validate
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+      # Add "- run: npm test" here once the project has real tests.
