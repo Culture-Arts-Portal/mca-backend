@@ -5,14 +5,24 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
+// Form definitions (form_schema v1), copied from mca-infra-docs/form-schemas.
+// require() reads each JSON file and turns it into a JavaScript object.
+const artistSchema = require('./form-schemas/artist-registration.json');
+const eventSchema = require('./form-schemas/event-permit.json');
+const grantSchema = require('./form-schemas/arts-grant.json');
+
 const prisma = new PrismaClient();
 
+// ---------- Test users (all share the password Password123!) ----------
 const users = [
   { name: 'Test Citizen', email: 'citizen@mca.test', nrc: '111111/11/1', phone: '0970000001', role: 'CITIZEN' },
   { name: 'Test Officer', email: 'officer@mca.test', nrc: '222222/22/1', phone: '0970000002', role: 'OFFICER' },
   { name: 'Test Admin', email: 'admin@mca.test', nrc: '333333/33/1', phone: '0970000003', role: 'ADMIN' },
 ];
 
+// ---------- Services ----------
+// formSchema = the pages of the form the citizen fills in (from the JSON files)
+// steps      = the approval stages, saved in the workflow_steps table
 const services = [
   {
     name: 'Artist / Creative Registration',
@@ -20,21 +30,7 @@ const services = [
     description: 'Register as a musician, visual artist or performer and receive a registration certificate.',
     fee: 150,
     isPublished: true,
-    formSchema: {
-      fields: [
-        { name: 'stageName', label: 'Stage / Artist Name', type: 'text', required: true },
-        {
-          name: 'discipline',
-          label: 'Discipline',
-          type: 'select',
-          required: true,
-          options: ['Music', 'Visual Arts', 'Dance', 'Theatre', 'Film', 'Literature'],
-        },
-        { name: 'yearsActive', label: 'Years Active', type: 'number', required: false },
-        { name: 'province', label: 'Province', type: 'text', required: true },
-        { name: 'portfolio', label: 'Portfolio (PDF)', type: 'file', required: false },
-      ],
-    },
+    formSchema: artistSchema,
     steps: [
       { stepOrder: 1, name: 'Officer Review', roleRequired: 'OFFICER' },
       { stepOrder: 2, name: 'Approval', roleRequired: 'ADMIN' },
@@ -44,17 +40,9 @@ const services = [
     name: 'Event / Performance Permit',
     slug: 'event-permit',
     description: 'Apply for a permit to hold a concert, festival or public performance.',
-    fee: 500,
+    fee: 500, // placeholder until the Team Lead sets the attendance-based fees
     isPublished: true,
-    formSchema: {
-      fields: [
-        { name: 'eventName', label: 'Event Name', type: 'text', required: true },
-        { name: 'venue', label: 'Venue', type: 'text', required: true },
-        { name: 'eventDate', label: 'Event Date', type: 'date', required: true },
-        { name: 'expectedAttendance', label: 'Expected Attendance', type: 'number', required: true },
-        { name: 'securityPlan', label: 'Security Plan (PDF)', type: 'file', required: true },
-      ],
-    },
+    formSchema: eventSchema,
     steps: [
       { stepOrder: 1, name: 'Officer Review', roleRequired: 'OFFICER' },
       { stepOrder: 2, name: 'Permit Approval', roleRequired: 'ADMIN' },
@@ -66,14 +54,7 @@ const services = [
     description: 'Apply for funding for a creative project.',
     fee: 0,
     isPublished: true,
-    formSchema: {
-      fields: [
-        { name: 'projectTitle', label: 'Project Title', type: 'text', required: true },
-        { name: 'summary', label: 'Project Summary', type: 'textarea', required: true },
-        { name: 'amountRequested', label: 'Amount Requested (ZMW)', type: 'number', required: true },
-        { name: 'budget', label: 'Budget (PDF)', type: 'file', required: true },
-      ],
-    },
+    formSchema: grantSchema,
     steps: [
       { stepOrder: 1, name: 'Eligibility Review', roleRequired: 'OFFICER' },
       { stepOrder: 2, name: 'Committee Review', roleRequired: 'OFFICER' },
@@ -82,10 +63,12 @@ const services = [
   },
 ];
 
+// ---------- Save everything ----------
 async function main() {
-  // All test users share this password: Password123!
+  // Hash the password once. The database stores only the hash, never the real password.
   const passwordHash = await bcrypt.hash('Password123!', 10);
 
+  // Users: create if missing, leave alone if they already exist
   for (const u of users) {
     await prisma.user.upsert({
       where: { email: u.email },
@@ -94,6 +77,7 @@ async function main() {
     });
   }
 
+  // Services: create if missing, otherwise update them and replace their steps
   for (const { steps, ...data } of services) {
     await prisma.service.upsert({
       where: { slug: data.slug },
