@@ -1,0 +1,149 @@
+// prisma/schema.prisma
+// Ministry of Culture and Arts portal: database tables
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Fixed lists of allowed values ----------
+
+enum Role {
+  CITIZEN
+  OFFICER
+  ADMIN
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  RETURNED
+  APPROVED
+  REJECTED
+  ISSUED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+// ---------- Tables ----------
+
+// People who use the portal: citizens, officers and admins
+model User {
+  id           Int                  @id @default(autoincrement())
+  name         String
+  nrc          String?              @unique
+  email        String               @unique
+  phone        String?
+  passwordHash String               @map("password_hash")
+  role         Role                 @default(CITIZEN)
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
+  applications Application[]
+  actions      ApplicationHistory[]
+
+  @@map("users")
+}
+
+// A service the ministry offers. Its form is stored as JSON (formSchema),
+// so a new service is added as data instead of new code.
+model Service {
+  id            Int            @id @default(autoincrement())
+  name          String
+  slug          String         @unique
+  description   String?
+  formSchema    Json           @map("form_schema")
+  fee           Decimal        @default(0) @db.Decimal(10, 2)
+  isPublished   Boolean        @default(false) @map("is_published")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  workflowSteps WorkflowStep[]
+  applications  Application[]
+
+  @@map("services")
+}
+
+// The approval stages for a service, e.g. 1 = Officer Review, 2 = Approval
+model WorkflowStep {
+  id           Int     @id @default(autoincrement())
+  serviceId    Int     @map("service_id")
+  stepOrder    Int     @map("step_order")
+  name         String
+  roleRequired Role    @map("role_required")
+  service      Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, stepOrder])
+  @@map("workflow_steps")
+}
+
+// One submitted request from a citizen. The answers are stored as JSON (formData).
+model Application {
+  id          Int                  @id @default(autoincrement())
+  referenceNo String               @unique @map("reference_no")
+  userId      Int                  @map("user_id")
+  serviceId   Int                  @map("service_id")
+  formData    Json                 @map("form_data")
+  status      ApplicationStatus    @default(DRAFT)
+  currentStep Int                  @default(1) @map("current_step")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  user        User                 @relation(fields: [userId], references: [id])
+  service     Service              @relation(fields: [serviceId], references: [id])
+  history     ApplicationHistory[]
+  documents   Document[]
+  payments    Payment[]
+
+  @@index([userId])
+  @@index([serviceId, status])
+  @@map("applications")
+}
+
+// Audit trail: who did what to an application, and when
+model ApplicationHistory {
+  id            Int         @id @default(autoincrement())
+  applicationId Int         @map("application_id")
+  action        String
+  actorId       Int         @map("actor_id")
+  comment       String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actor         User        @relation(fields: [actorId], references: [id])
+
+  @@map("application_history")
+}
+
+// Files uploaded with an application (e.g. a security plan PDF)
+model Document {
+  id            Int         @id @default(autoincrement())
+  applicationId Int         @map("application_id")
+  filePath      String      @map("file_path")
+  type          String
+  createdAt     DateTime    @default(now()) @map("created_at")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("documents")
+}
+
+// Fees owed or paid for an application (mock payments to start)
+model Payment {
+  id             Int           @id @default(autoincrement())
+  applicationId  Int           @map("application_id")
+  amount         Decimal       @db.Decimal(10, 2)
+  status         PaymentStatus @default(PENDING)
+  method         String?
+  transactionRef String?       @unique @map("transaction_ref")
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  application    Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
