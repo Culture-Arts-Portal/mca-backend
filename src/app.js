@@ -1,24 +1,27 @@
-// src/app.js
-// TEMPORARY minimal server. Person 2's version will replace this file.
-require('dotenv').config();
+// Builds the app but does NOT start it: server.js does that, and tests import this file.
 const express = require('express');
 const cors = require('cors');
+const { corsOrigin } = require('./config/env');
+const routes = require('./routes');
+const notFound = require('./middleware/notFound');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:5173' }));
-app.use(express.json());
+app.disable('x-powered-by');   // don't tell the world which framework we use
 
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, data: { status: 'ok' }, message: 'OK' });
-});
+//1. Only our frontend may call the API from a browser
+app.use(cors({ origin: corsOrigin }));
 
-app.use('/api/services', require('./modules/services/services.routes'));
+//2. Read JSON bodies into req.body (refuse anything over 100KB)
+app.use(express.json({ limit: '100kb' }));
 
-// TEMP error handler: Person 2 owns the real one
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(err.status || 500).json({ success: false, data: null, message: err.message });
-});
+//3. Routes (the menu): every route lives in src/routes/index.js, under /api
+app.use('/api', routes);
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log('API on http://localhost:' + PORT));
+//4. No route matched -> 404
+app.use(notFound);
+
+//5. Every error ends here (always last)
+app.use(errorHandler);
+
+module.exports = app;
