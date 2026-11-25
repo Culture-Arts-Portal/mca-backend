@@ -28,7 +28,7 @@ const services = [
     name: 'Artist / Creative Registration',
     slug: 'artist-registration',
     description: 'Register as a musician, visual artist or performer and receive a registration certificate.',
-    fee: 500,
+    fee: 150,
     isPublished: true,
     formSchema: artistSchema,
     steps: [
