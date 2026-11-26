@@ -42,3 +42,19 @@ exports.validateRegister = (body) => {
     } 
     return { name: cleanName, email: cleanEmail, password, phone: cleanPhone };
 };
+
+exports.validateLogin = (body) => {
+  body = body || {};
+  const { email, password } = body;
+
+  if (typeof email !== 'string' || email.trim() === '' ||
+      typeof password !== 'string' || password === '') {
+    throw new AppError(400, 'Email and password are required');
+  }
+  // Registration never allows more than 72 bytes, so a longer password can't be right.
+  // Refusing it here also stops someone sending a huge password to waste bcrypt time.
+  if (Buffer.byteLength(password) > 72) {
+    throw new AppError(401, 'Email or password is incorrect');
+  }
+  return { email: email.trim().toLowerCase(), password };
+};

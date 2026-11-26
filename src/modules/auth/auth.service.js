@@ -39,3 +39,22 @@ exports.register = async ({ name, email, password, phone }) => {
 };
 
 exports.signToken = signToken;   // login (step 6) will reuse it
+
+// A real bcrypt hash of a throwaway string. Used when the email is unknown,
+// so a wrong email takes as long as a wrong password (no timing leak).
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing-only', BCRYPT_COST);
+
+exports.login = async ({ email, password }) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { ...PUBLIC_USER, passwordHash: true },   // the one place we need the hash
+  });
+
+  const passwordOk = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+  if (!user || !passwordOk) {
+    throw new AppError(401, 'Email or password is incorrect');
+  }
+
+  const { passwordHash, ...publicUser } = user;        // drop the hash before it leaves
+  return { token: signToken(publicUser), user: publicUser };
+};
