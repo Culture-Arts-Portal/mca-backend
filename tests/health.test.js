@@ -3,6 +3,7 @@
 process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
 process.env.PORT = '5000';
 process.env.CORS_ORIGIN = 'http://localhost:5173';
+process.env.JWT_SECRET = 'test-only-secret-not-used-anywhere-real-123';
 
 const request = require('supertest');
 const app = require('../src/app');
