@@ -7,6 +7,6 @@ const { ok } = require('../utils/respond');
 router.get('/health', (req, res) => ok(res, { status: 'ok', service: 'mca-backend' }));
 
 router.use('/services', require('../modules/services/services.routes'));   // Person 3
-// Week 2: router.use('/auth', require('../modules/auth/auth.routes'));     // Person 2
+router.use('/auth', require('../modules/auth/auth.routes'));     // Person 2
 
 module.exports = router;
