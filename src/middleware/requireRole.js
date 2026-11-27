@@ -1,9 +1,20 @@
 // src/middleware/requireRole.js
-// Lets a request through only if the logged-in user has one of the given roles.
-// Use it after the auth middleware:  requireRole(['OFFICER', 'ADMIN'])
+// The "staff only" sign. Always goes AFTER requireAuth, which sets req.auth.
+// Usage:  requireRole('ADMIN')
+//         requireRole(['OFFICER', 'ADMIN'])
+//         requireRole('CITIZEN', 'Only citizens can apply')   // your own 403 message
 const AppError = require('../utils/AppError');
 
-module.exports = (roles, message = 'You are not allowed to do this') => (req, res, next) => {
-  if (!req.user || !roles.includes(req.user.role)) throw new AppError(403, message);
-  next();
+module.exports = (roles, message = 'You do not have permission to do this') => {
+  const allowed = [].concat(roles);              // 'ADMIN' -> ['ADMIN'];  ['A','B'] stays as it is
+
+  return (req, res, next) => {
+    if (!req.auth) {
+      throw new AppError(401, 'Please log in');  // someone forgot requireAuth before this
+    }
+    if (!allowed.includes(req.auth.role)) {
+      throw new AppError(403, message);
+    }
+    next();
+  };
 };

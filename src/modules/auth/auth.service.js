@@ -1,0 +1,67 @@
+// src/modules/auth/auth.service.js
+// The auth logic: hashing, saving users and making tokens. No req/res in here.
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const prisma = require('../../config/db');
+const env = require('../../config/env');
+const AppError = require('../../utils/AppError');
+
+const BCRYPT_COST = 12;
+
+// The only user fields that may ever leave the server. passwordHash is NOT here.
+const PUBLIC_USER = { id: true, name: true, email: true, phone: true, role: true };
+
+function signToken(user) {
+  return jwt.sign(
+    { sub: String(user.id), role: user.role },
+    env.jwtSecret,
+    { expiresIn: env.jwtExpiresIn, algorithm: 'HS256' }
+  );
+}
+
+exports.register = async ({ name, email, password, phone }) => {
+  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+
+  let user;
+  try {
+    user = await prisma.user.create({
+      data: { name, email, phone, passwordHash },
+      select: PUBLIC_USER,
+    });
+  } catch (err) {
+    if (err.code === 'P2002') {
+      throw new AppError(409, 'An account with this email already exists');
+    }
+    throw err;
+  }
+
+  return { token: signToken(user), user };
+};
+
+exports.signToken = signToken;   // login (step 6) will reuse it
+
+// A real bcrypt hash of a throwaway string. Used when the email is unknown,
+// so a wrong email takes as long as a wrong password (no timing leak).
+const DUMMY_HASH = bcrypt.hashSync('dummy-password-for-timing-only', BCRYPT_COST);
+
+exports.login = async ({ email, password }) => {
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { ...PUBLIC_USER, passwordHash: true },   // the one place we need the hash
+  });
+
+  const passwordOk = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+  if (!user || !passwordOk) {
+    throw new AppError(401, 'Email or password is incorrect');
+  }
+
+  const { passwordHash, ...publicUser } = user;        // drop the hash before it leaves
+  return { token: signToken(publicUser), user: publicUser };
+};
+exports.getMe = async (userId) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: PUBLIC_USER });
+  if (!user) {
+    throw new AppError(401, 'Please log in');   // the pass is real, but the account was deleted
+  }
+  return user;
+};
