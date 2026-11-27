@@ -16,3 +16,8 @@ exports.login = async (req, res) => {
   const data = await authService.login(input);
   ok(res, data, 'Logged in');            // 200 is the default
 };
+// GET /api/auth/me
+exports.me = async (req, res) => {
+  const user = await authService.getMe(req.auth.userId);
+  ok(res, { user });
+};

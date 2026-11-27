@@ -58,3 +58,10 @@ exports.login = async ({ email, password }) => {
   const { passwordHash, ...publicUser } = user;        // drop the hash before it leaves
   return { token: signToken(publicUser), user: publicUser };
 };
+exports.getMe = async (userId) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: PUBLIC_USER });
+  if (!user) {
+    throw new AppError(401, 'Please log in');   // the pass is real, but the account was deleted
+  }
+  return user;
+};
